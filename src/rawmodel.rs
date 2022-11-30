@@ -5,19 +5,21 @@ use std::path::Path;
 use std::collections::HashMap;
 use crate::{M2, V2};
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct RawVertex {
 	pub pos: V2,
 	pub tex: V2,
 	pub im: f32,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+type Vid = i32;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Rawmodel {
-	pub name: HashMap<String, u32>,
-	pub neigh: HashMap<u32, Vec<u32>>,
-	pub vs: HashMap<u32, RawVertex>,
-	pub fs: Vec<[u32; 3]>,
+	pub name: HashMap<String, Vid>,
+	pub neigh: HashMap<Vid, Vec<Vid>>,
+	pub vs: HashMap<Vid, RawVertex>,
+	pub fs: Vec<[Vid; 3]>,
 	pub tex_layer: i32,
 	pub is_static: bool,
 }
@@ -28,7 +30,7 @@ impl Rawmodel {
 	) -> std::io::Result<Self> {
 		let mut name = HashMap::default();
 		let mut vs = HashMap::default();
-		let mut id_alloc = 0u32;
+		let mut id_alloc = Vid::default();
 		let mut fs = Vec::new();
 		let file = std::fs::File::open(file)?;
 		let reader = BufReader::new(file);
@@ -45,8 +47,8 @@ impl Rawmodel {
 						split[2].parse::<f32>().unwrap(),
 						split[3].parse::<f32>().unwrap(),
 					);
-					let im = split.get(3).map(|x| x.parse::<f32>().unwrap()).unwrap_or(1f32);
-					name.insert(split[0].to_string(), id_alloc);
+					let im = split.get(4).map(|x| x.parse::<f32>().unwrap()).unwrap_or(1f32);
+					name.insert(split[1].to_string(), id_alloc);
 					vs.insert(id_alloc, RawVertex {
 						pos: v,
 						tex: v,
