@@ -24,6 +24,7 @@ pub struct Control {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Rawmodel {
 	pub name: HashMap<String, Vid>,
+	pub id_alloc: Vid,
 	pub neigh: HashMap<Vid, Vec<Vid>>,
 	pub border: Vec<Vid>,
 	pub vs: HashMap<Vid, RawVertex>,
@@ -36,7 +37,13 @@ pub struct Rawmodel {
 impl Rawmodel {
 	pub fn load<P: AsRef<Path>>(file: P) -> std::io::Result<Self> {
 		let string: String = std::fs::read_to_string(file)?;
-		Ok(serde_json::from_str(&string).unwrap())
+		Ok(serde_json::from_str(&string)?)
+	}
+
+	pub fn save<P: AsRef<Path>>(&self, file: P) -> std::io::Result<()> {
+		let string = serde_json::to_string(self)?;
+		std::fs::write(file, string)?;
+		Ok(())
 	}
 
 	pub fn build_topo(&mut self) {
@@ -168,6 +175,7 @@ impl Rawmodel {
 			control,
 			tex_layer: -2,
 			is_static: false,
+			id_alloc,
 		};
 		result.build_topo();
 		Ok(result)
