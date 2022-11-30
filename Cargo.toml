@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rust_stddep = {path = "../rust_stddep", features = ["nalgebra"]}
+serde = {version = "1", features = ["derive"]}
+nalgebra = {version = "0.31", features = ["serde-serialize"]}
