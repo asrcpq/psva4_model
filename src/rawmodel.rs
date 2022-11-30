@@ -12,7 +12,7 @@ pub struct RawVertex {
 	pub im: f32,
 }
 
-type Vid = i32;
+type Vid = u64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Control {
@@ -179,6 +179,11 @@ impl Rawmodel {
 		};
 		result.build_topo();
 		Ok(result)
+	}
+
+	pub fn alloc_id(&mut self) -> Vid {
+		self.id_alloc += 1;
+		self.id_alloc - 1
 	}
 
 	pub fn set_static(&mut self) {
