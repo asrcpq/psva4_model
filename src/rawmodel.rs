@@ -21,10 +21,11 @@ pub struct Control {
 	pub k: f32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Rawmodel {
 	pub name: HashMap<String, Vid>,
 	pub neigh: HashMap<Vid, Vec<Vid>>,
+	pub border: Vec<Vid>,
 	pub vs: HashMap<Vid, RawVertex>,
 	pub fs: Vec<[Vid; 3]>,
 	pub control: Vec<Control>,
@@ -33,7 +34,76 @@ pub struct Rawmodel {
 }
 
 impl Rawmodel {
-	pub fn load<P: AsRef<Path>>(
+	pub fn load<P: AsRef<Path>>(file: P) -> std::io::Result<Self> {
+		let string: String = std::fs::read_to_string(file)?;
+		Ok(serde_json::from_str(&string).unwrap())
+	}
+
+	pub fn build_topo(&mut self) {
+		assert!(self.neigh.is_empty());
+		for ids in self.fs.iter() {
+			for i in 0..3 {
+				for j in 0..3 {
+					if i == j { continue }
+					let vs = self.neigh.entry(ids[i]).or_insert_with(Default::default);
+					if vs.iter().any(|&x| x == ids[j]) { continue }
+					vs.push(ids[j]);
+				}
+			}
+		}
+
+		for (k, v) in self.vs.iter() {
+			let k = *k;
+			let p0 = v.pos;
+			let neighs = self.neigh.get(&k).unwrap();
+			let mut angs: Vec<(Vid, f32)> = neighs
+				.iter()
+				.map(|v| {
+					let vo = self.vs.get(v).unwrap();
+					let p1 = vo.pos;
+					let dp = p1 - p0;
+					(*v, dp[1].atan2(dp[0]))
+				}).collect();
+			angs.sort_by(|x, y| x.1.partial_cmp(&y.1).unwrap());
+			let (mut vs, angs): (Vec<Vid>, Vec<_>) = angs.into_iter().unzip();
+			let neilen = neighs.len();
+			let rot = if neilen <= 1 {
+				eprintln!("ERROR: Non-manifold found");
+				None
+			} else if neilen == 2 {
+				if cgalg::d2::angle_dist(angs[0], angs[1]) > 0f32 {
+					Some(1)
+				} else {
+					Some(0)
+				}
+			} else {
+				let mut rot = None;
+				for idx in 0..neilen {
+					let id1 = vs[idx];
+					let id2 = vs[(idx + 1) % neilen];
+					let mut ids = [k, id1, id2];
+					ids.sort();
+					if !self.fs.contains(&ids) {
+						if rot.is_some() {
+							eprintln!("ERROR: Non-manifold found");
+						} else {
+							rot = Some(idx + 1);
+							break
+						}
+					}
+				}
+				rot
+			};
+			if let Some(idx) = rot {
+				vs.rotate_left(idx);
+				self.border.push(k);
+			}
+			// assert!(vs.iter().all(|x| *x != k));
+			self.neigh.insert(k, vs);
+		}
+	}
+
+	pub fn simple_load<P: AsRef<Path>>(
 		file: P,
 	) -> std::io::Result<Self> {
 		let mut name = HashMap::default();
@@ -69,9 +139,9 @@ impl Rawmodel {
 					if split.len() != 4 {
 						panic!("v error");
 					}
-					fs.push(core::array::from_fn(
-						|idx| *name.get(split[idx + 1]).unwrap()
-					));
+					let mut f = core::array::from_fn(|idx| *name.get(split[idx + 1]).unwrap());
+					f.sort_unstable();
+					fs.push(f);
 				}
 				"c" => {
 					if split.len() != 5 {
@@ -79,8 +149,8 @@ impl Rawmodel {
 					}
 					control.push(Control {
 						vs: [
-							split[1].parse::<i32>().unwrap(),
-							split[2].parse::<i32>().unwrap(),
+							*name.get(split[1]).unwrap(),
+							*name.get(split[2]).unwrap(),
 						],
 						key: split[3].bytes().next().unwrap(),
 						k: split[4].parse::<f32>().unwrap(),
@@ -89,15 +159,18 @@ impl Rawmodel {
 				_ => panic!("line error {}", split[0]),
 			}
 		}
-		Ok(Self {
+		let mut result = Self {
 			name,
 			neigh: Default::default(),
+			border: Vec::new(),
 			vs,
 			fs,
 			control,
 			tex_layer: -2,
 			is_static: false,
-		})
+		};
+		result.build_topo();
+		Ok(result)
 	}
 
 	pub fn set_static(&mut self) {
