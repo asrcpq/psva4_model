@@ -15,11 +15,19 @@ pub struct RawVertex {
 type Vid = i32;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Control {
+	pub vs: [Vid; 2],
+	pub key: u8,
+	pub k: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Rawmodel {
 	pub name: HashMap<String, Vid>,
 	pub neigh: HashMap<Vid, Vec<Vid>>,
 	pub vs: HashMap<Vid, RawVertex>,
 	pub fs: Vec<[Vid; 3]>,
+	pub control: Vec<Control>,
 	pub tex_layer: i32,
 	pub is_static: bool,
 }
@@ -32,6 +40,7 @@ impl Rawmodel {
 		let mut vs = HashMap::default();
 		let mut id_alloc = Vid::default();
 		let mut fs = Vec::new();
+		let mut control = Vec::new();
 		let file = std::fs::File::open(file)?;
 		let reader = BufReader::new(file);
 		for line in reader.lines() {
@@ -64,6 +73,19 @@ impl Rawmodel {
 						|idx| *name.get(split[idx + 1]).unwrap()
 					));
 				}
+				"c" => {
+					if split.len() != 5 {
+						panic!("c error");
+					}
+					control.push(Control {
+						vs: [
+							split[1].parse::<i32>().unwrap(),
+							split[2].parse::<i32>().unwrap(),
+						],
+						key: split[3].bytes().next().unwrap(),
+						k: split[4].parse::<f32>().unwrap(),
+					});
+				}
 				_ => panic!("line error {}", split[0]),
 			}
 		}
@@ -72,6 +94,7 @@ impl Rawmodel {
 			neigh: Default::default(),
 			vs,
 			fs,
+			control,
 			tex_layer: -2,
 			is_static: false,
 		})
