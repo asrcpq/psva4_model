@@ -37,6 +37,21 @@ impl Rawmodel {
 		Ok(serde_json::from_str(&string)?)
 	}
 
+	pub fn fix(&mut self) {
+		let mut bad_ent = Vec::new();
+		for k in self.dcs.keys() {
+			if !self.neigh.contains_key(&k[0]) ||
+				!self.neigh.contains_key(&k[1])
+			{
+				bad_ent.push(k.clone());
+			}
+		}
+		for ent in bad_ent.into_iter() {
+			eprintln!("fix: dcs bad ent {:?}", ent);
+			self.dcs.remove(&ent);
+		}
+	}
+
 	pub fn save<P: AsRef<Path>>(&self, file: P) -> std::io::Result<()> {
 		let string = serde_json::to_string(self)?;
 		std::fs::write(file, string)?;
