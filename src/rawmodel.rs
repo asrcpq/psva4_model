@@ -22,7 +22,7 @@ pub struct Rawmodel {
 	pub neigh: HashMap<Vid, Vec<Vid>>,
 	pub border: HashSet<Vid>,
 	pub vs: HashMap<Vid, RawVertex>,
-	// pub dcs: HashMap<[Vid; 2], f32>,
+	pub dcs: HashMap<[Vid; 2], f32>,
 	pub fs: Vec<[Vid; 3]>,
 	pub tex_layer: i32,
 	pub is_static: bool,
@@ -51,9 +51,17 @@ impl Rawmodel {
 			let k = *k;
 			let p0 = v.pos;
 			let neighs = self.neigh.get(&k).unwrap();
-			if neighs.iter().any(|x| *x == k) {
-				eprintln!("ERROR: nm, self-self");
-				return
+			for neigh in neighs.iter() {
+				if *neigh == k {
+					eprintln!("ERROR: nm, self-self");
+					return
+				}
+				let mut ids = [*neigh, k];
+				ids.sort_unstable();
+				if !self.dcs.contains_key(&ids) {
+					eprintln!("ERROR: dc not exist {:?}", ids);
+					return
+				}
 			}
 			let mut angs: Vec<(Vid, f32)> = neighs
 				.iter()
@@ -111,6 +119,7 @@ impl Rawmodel {
 
 	// build vs from fs
 	pub fn build_topo(&mut self) {
+		self.dcs.clear();
 		self.neigh.clear();
 		self.border.clear();
 		// build unsorted neigh
@@ -119,6 +128,9 @@ impl Rawmodel {
 				for j in 0..3 {
 					if i == j { continue }
 					let vs = self.neigh.entry(ids[i]).or_insert_with(Default::default);
+					let mut lids = [ids[i], ids[j]];
+					lids.sort_unstable();
+					self.dcs.insert(lids, 1e-6);
 					if vs.iter().any(|&x| x == ids[j]) { continue }
 					vs.push(ids[j]);
 				}
@@ -232,6 +244,7 @@ impl Rawmodel {
 			name,
 			neigh: Default::default(),
 			border: Default::default(),
+			dcs: Default::default(),
 			vs,
 			fs,
 			tex_layer: -2,
