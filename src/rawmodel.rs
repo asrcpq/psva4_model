@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::{M2, V2};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -12,7 +12,7 @@ pub struct RawVertex {
 	pub im: f32,
 }
 
-type Vid = u64;
+pub type Vid = u64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Control {
@@ -26,7 +26,7 @@ pub struct Rawmodel {
 	pub name: HashMap<String, Vid>,
 	pub id_alloc: Vid,
 	pub neigh: HashMap<Vid, Vec<Vid>>,
-	pub border: Vec<Vid>,
+	pub border: HashSet<Vid>,
 	pub vs: HashMap<Vid, RawVertex>,
 	pub fs: Vec<[Vid; 3]>,
 	pub control: Vec<Control>,
@@ -46,8 +46,95 @@ impl Rawmodel {
 		Ok(())
 	}
 
+	// build fs from vs
+	pub fn build_topo2(&mut self) {
+		self.fs.clear();
+		self.border.clear();
+		// edge visited 1 time = border, 2 times = inner
+		let mut edgeset: HashSet<[Vid; 2]> = Default::default();
+		let mut faceset: HashSet<[Vid; 3]> = Default::default();
+
+		// find border
+		for (k, vs) in self.neigh.iter() {
+			let k = *k;
+			if vs.len() <= 1 {
+				eprintln!("ERROR: Non manifold!");
+				return
+			}
+			for v in vs.iter() {
+				let mut ids = [k, *v];
+				ids.sort_unstable();
+				if !edgeset.insert(ids) {
+					self.border.insert(k);
+					self.border.insert(*v);
+				}
+			}
+		}
+
+		// sort vs
+		for (k, v) in self.vs.iter() {
+			let k = *k;
+			let p0 = v.pos;
+			let neighs = self.neigh.get(&k).unwrap();
+			let mut angs: Vec<(Vid, f32)> = neighs
+				.iter()
+				.map(|v| {
+					let vo = self.vs.get(v).unwrap();
+					let p1 = vo.pos;
+					let dp = p1 - p0;
+					(*v, dp[1].atan2(dp[0]))
+				}).collect();
+			angs.sort_unstable_by(|x, y| x.1.partial_cmp(&y.1).unwrap());
+			let (mut vs, _angs): (Vec<Vid>, Vec<_>) = angs.into_iter().unzip();
+			let neilen = neighs.len();
+			if self.border.contains(&k) {
+				let mut neibor = Vec::new();
+				for vn in vs.iter() {
+					if self.border.contains(vn) {
+						neibor.push(*vn);
+					}
+				}
+				if neibor.len() != 2 {
+					eprintln!("ERROR: Non manifold!");
+					return
+				}
+				let p0 = vs.iter().position(|x| *x == neibor[0]).unwrap();
+				let p1 = vs.iter().position(|x| *x == neibor[1]).unwrap();
+				let rot = if p1 == (p0 + 1) % neilen {
+					p1
+				} else if p0 == (p1 + 1) % neilen {
+					p0
+				} else {
+					eprintln!("ERROR: Non manifold!");
+					return
+				};
+				vs.rotate_left(rot);
+				self.neigh.insert(k, vs);
+			}
+		}
+
+		// build fs
+		for (k, v) in self.neigh.iter() {
+			let vlen = v.len();
+			for idx in 0..vlen - 1 {
+				let mut ids = [*k, v[idx], v[idx + 1]];
+				ids.sort_unstable();
+				faceset.insert(ids);
+			}
+			if !self.border.contains(k) {
+				let mut ids = [*k, v[0], v[vlen - 1]];
+				ids.sort_unstable();
+				faceset.insert(ids);
+			}
+		}
+		self.fs = faceset.into_iter().collect();
+	}
+
+	// build vs from fs
 	pub fn build_topo(&mut self) {
-		assert!(self.neigh.is_empty());
+		self.neigh.clear();
+		self.border.clear();
+		// build unsorted neigh
 		for ids in self.fs.iter() {
 			for i in 0..3 {
 				for j in 0..3 {
@@ -71,7 +158,7 @@ impl Rawmodel {
 					let dp = p1 - p0;
 					(*v, dp[1].atan2(dp[0]))
 				}).collect();
-			angs.sort_by(|x, y| x.1.partial_cmp(&y.1).unwrap());
+			angs.sort_unstable_by(|x, y| x.1.partial_cmp(&y.1).unwrap());
 			let (mut vs, angs): (Vec<Vid>, Vec<_>) = angs.into_iter().unzip();
 			let neilen = neighs.len();
 			let rot = if neilen <= 1 {
@@ -103,7 +190,7 @@ impl Rawmodel {
 			};
 			if let Some(idx) = rot {
 				vs.rotate_left(idx);
-				self.border.push(k);
+				self.border.insert(k);
 			}
 			// assert!(vs.iter().all(|x| *x != k));
 			self.neigh.insert(k, vs);
@@ -169,7 +256,7 @@ impl Rawmodel {
 		let mut result = Self {
 			name,
 			neigh: Default::default(),
-			border: Vec::new(),
+			border: Default::default(),
 			vs,
 			fs,
 			control,
