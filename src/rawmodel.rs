@@ -1,3 +1,4 @@
+use serde_with::serde_as;
 use serde::{Serialize, Deserialize};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -15,6 +16,7 @@ pub struct RawVertex {
 
 pub type Vid = u64;
 
+#[serde_as]
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Rawmodel {
 	pub name: HashMap<String, Vid>,
@@ -22,6 +24,7 @@ pub struct Rawmodel {
 	pub neigh: HashMap<Vid, Vec<Vid>>,
 	pub border: HashSet<Vid>,
 	pub vs: HashMap<Vid, RawVertex>,
+	#[serde_as(as = "Vec<(_, _)>")]
 	pub dcs: HashMap<[Vid; 2], f32>,
 	pub fs: Vec<[Vid; 3]>,
 	pub tex_layer: i32,
@@ -59,8 +62,8 @@ impl Rawmodel {
 				let mut ids = [*neigh, k];
 				ids.sort_unstable();
 				if !self.dcs.contains_key(&ids) {
-					eprintln!("ERROR: dc not exist {:?}", ids);
-					return
+					eprintln!("WARN: dc {:?} not exist, inst with 1e-6", ids);
+					self.dcs.insert(ids, 1e-6);
 				}
 			}
 			let mut angs: Vec<(Vid, f32)> = neighs
@@ -185,16 +188,6 @@ impl Rawmodel {
 			}
 			// assert!(vs.iter().all(|x| *x != k));
 			self.neigh.insert(k, vs);
-		}
-	}
-
-	pub fn try_load<P: AsRef<Path>>(
-		file: P,
-	) -> std::io::Result<Self> {
-		if let Ok(x) = Self::load(&file) {
-			Ok(x)
-		} else {
-			Self::simple_load(file)
 		}
 	}
 
