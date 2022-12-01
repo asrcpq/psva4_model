@@ -41,7 +41,8 @@ impl Rawmodel {
 		let mut bad_ent = Vec::new();
 		for k in self.dcs.keys() {
 			if !self.neigh.contains_key(&k[0]) ||
-				!self.neigh.contains_key(&k[1])
+				!self.neigh.contains_key(&k[1]) ||
+				k[0] == k[1]
 			{
 				bad_ent.push(k.clone());
 			}
@@ -49,6 +50,20 @@ impl Rawmodel {
 		for ent in bad_ent.into_iter() {
 			eprintln!("fix: dcs bad ent {:?}", ent);
 			self.dcs.remove(&ent);
+		}
+
+		for (k, v) in self.neigh.iter_mut() {
+			if let Some(pos) = v.iter().position(|x| x == k) {
+				eprintln!("fix: self-self neigh {}", k);
+				v.remove(pos);
+			}
+		}
+	}
+
+	// fix tex points to pos
+	pub fn pos2tex(&mut self) {
+		for v in self.vs.values_mut() {
+			v.tex = v.pos;
 		}
 	}
 
