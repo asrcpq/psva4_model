@@ -1,9 +1,10 @@
 use serde::{Serialize, Deserialize};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-
 use std::collections::{HashMap, HashSet};
+
 use crate::{M2, V2};
+use cgalg::d2::angle_dist;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct RawVertex {
@@ -57,6 +58,10 @@ impl Rawmodel {
 			let k = *k;
 			let p0 = v.pos;
 			let neighs = self.neigh.get(&k).unwrap();
+			if neighs.iter().any(|x| *x == k) {
+				eprintln!("ERROR: nm, self-self");
+				return
+			}
 			let mut angs: Vec<(Vid, f32)> = neighs
 				.iter()
 				.map(|v| {
@@ -66,29 +71,45 @@ impl Rawmodel {
 					(*v, dp[1].atan2(dp[0]))
 				}).collect();
 			angs.sort_unstable_by(|x, y| x.1.partial_cmp(&y.1).unwrap());
-			let (mut vs, _angs): (Vec<Vid>, Vec<_>) = angs.into_iter().unzip();
+			let (mut vs, angs): (Vec<Vid>, Vec<_>) = angs.into_iter().unzip();
 			let neilen = neighs.len();
 			if neilen <= 1 {
 				eprintln!("ERROR: nm, neigh <= 1 {}", k);
 				return
 			}
 			let mut nonface = None;
-			for i in 0..neilen {
-				let i2 = (i + 1) % neilen;
-				if !self.neigh.get(&vs[i]).unwrap().contains(&vs[i2]) {
-					if nonface.is_none() {
-						nonface = Some(i2);
-					} else {
-						eprintln!("ERROR: nm, {} contains 2 nonfaces", k);
-					}
+
+			// sweep around k, check all point pairs are connect, or border
+			// but neilen == 2 must be border
+			if neilen == 2 {
+				let nf = if angle_dist(angs[0], angs[1]) > 0f32 {
+					0
 				} else {
-					let mut ids = [vs[i], vs[i2], k];
-					ids.sort_unstable();
-					faceset.insert(ids);
+					1
+				};
+				nonface = Some(nf);
+				let mut ids = [vs[0], vs[1], k];
+				ids.sort_unstable();
+				faceset.insert(ids);
+			} else {
+				for i in 0..neilen {
+					let i2 = (i + 1) % neilen;
+					if !self.neigh.get(&vs[i]).unwrap().contains(&vs[i2]) {
+						if nonface.is_none() {
+							nonface = Some(i2);
+						} else {
+							eprintln!("ERROR: nm, {} contains 2 nonfaces", k);
+						}
+					} else {
+						let mut ids = [vs[i], vs[i2], k];
+						ids.sort_unstable();
+						faceset.insert(ids);
+					}
 				}
 			}
 			if let Some(x) = nonface {
 				vs.rotate_left(x);
+				self.border.insert(k);
 			}
 			self.neigh.insert(k, vs);
 		}
@@ -130,7 +151,7 @@ impl Rawmodel {
 				eprintln!("ERROR: Non-manifold found");
 				None
 			} else if neilen == 2 {
-				if cgalg::d2::angle_dist(angs[0], angs[1]) > 0f32 {
+				if angle_dist(angs[0], angs[1]) > 0f32 {
 					Some(1)
 				} else {
 					Some(0)
@@ -159,6 +180,16 @@ impl Rawmodel {
 			}
 			// assert!(vs.iter().all(|x| *x != k));
 			self.neigh.insert(k, vs);
+		}
+	}
+
+	pub fn try_load<P: AsRef<Path>>(
+		file: P,
+	) -> std::io::Result<Self> {
+		if let Ok(x) = Self::load(&file) {
+			Ok(x)
+		} else {
+			Self::simple_load(file)
 		}
 	}
 
