@@ -120,8 +120,22 @@ impl Rawmodel {
 		self.fs = faceset.into_iter().collect();
 	}
 
+	pub fn add_neigh_raw(&mut self, ids: [Vid; 2]) {
+		let e = self.neigh.entry(ids[0]).or_insert_with(Vec::new);
+		e.push(ids[1]);
+		let e = self.neigh.entry(ids[1]).or_insert_with(Vec::new);
+		e.push(ids[0]);
+	}
+
+	pub fn squash_neigh(&mut self) {
+		for v in self.neigh.values_mut() {
+			v.sort();
+			v.dedup();
+		}
+	}
+
 	// build vs from fs
-	pub fn build_topo(&mut self) {
+	fn build_topo(&mut self) {
 		self.dcs.clear();
 		self.neigh.clear();
 		self.border.clear();
@@ -134,11 +148,11 @@ impl Rawmodel {
 					let mut lids = [ids[i], ids[j]];
 					lids.sort_unstable();
 					self.dcs.insert(lids, 1e-6);
-					if vs.iter().any(|&x| x == ids[j]) { continue }
 					vs.push(ids[j]);
 				}
 			}
 		}
+		self.squash_neigh();
 
 		for (k, v) in self.vs.iter() {
 			let k = *k;
