@@ -50,26 +50,7 @@ impl Rawmodel {
 	pub fn build_topo2(&mut self) {
 		self.fs.clear();
 		self.border.clear();
-		// edge visited 1 time = border, 2 times = inner
-		let mut edgeset: HashSet<[Vid; 2]> = Default::default();
 		let mut faceset: HashSet<[Vid; 3]> = Default::default();
-
-		// find border
-		for (k, vs) in self.neigh.iter() {
-			let k = *k;
-			if vs.len() <= 1 {
-				eprintln!("ERROR: Non manifold!");
-				return
-			}
-			for v in vs.iter() {
-				let mut ids = [k, *v];
-				ids.sort_unstable();
-				if !edgeset.insert(ids) {
-					self.border.insert(k);
-					self.border.insert(*v);
-				}
-			}
-		}
 
 		// sort vs
 		for (k, v) in self.vs.iter() {
@@ -87,45 +68,29 @@ impl Rawmodel {
 			angs.sort_unstable_by(|x, y| x.1.partial_cmp(&y.1).unwrap());
 			let (mut vs, _angs): (Vec<Vid>, Vec<_>) = angs.into_iter().unzip();
 			let neilen = neighs.len();
-			if self.border.contains(&k) {
-				let mut neibor = Vec::new();
-				for vn in vs.iter() {
-					if self.border.contains(vn) {
-						neibor.push(*vn);
+			if neilen <= 1 {
+				eprintln!("ERROR: nm, neigh <= 1 {}", k);
+				return
+			}
+			let mut nonface = None;
+			for i in 0..neilen {
+				let i2 = (i + 1) % neilen;
+				if !self.neigh.get(&vs[i]).unwrap().contains(&vs[i2]) {
+					if nonface.is_none() {
+						nonface = Some(i2);
+					} else {
+						eprintln!("ERROR: nm, {} contains 2 nonfaces", k);
 					}
-				}
-				if neibor.len() != 2 {
-					eprintln!("ERROR: Non manifold!");
-					return
-				}
-				let p0 = vs.iter().position(|x| *x == neibor[0]).unwrap();
-				let p1 = vs.iter().position(|x| *x == neibor[1]).unwrap();
-				let rot = if p1 == (p0 + 1) % neilen {
-					p1
-				} else if p0 == (p1 + 1) % neilen {
-					p0
 				} else {
-					eprintln!("ERROR: Non manifold!");
-					return
-				};
-				vs.rotate_left(rot);
-				self.neigh.insert(k, vs);
+					let mut ids = [vs[i], vs[i2], k];
+					ids.sort_unstable();
+					faceset.insert(ids);
+				}
 			}
-		}
-
-		// build fs
-		for (k, v) in self.neigh.iter() {
-			let vlen = v.len();
-			for idx in 0..vlen - 1 {
-				let mut ids = [*k, v[idx], v[idx + 1]];
-				ids.sort_unstable();
-				faceset.insert(ids);
+			if let Some(x) = nonface {
+				vs.rotate_left(x);
 			}
-			if !self.border.contains(k) {
-				let mut ids = [*k, v[0], v[vlen - 1]];
-				ids.sort_unstable();
-				faceset.insert(ids);
-			}
+			self.neigh.insert(k, vs);
 		}
 		self.fs = faceset.into_iter().collect();
 	}
