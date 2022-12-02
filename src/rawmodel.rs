@@ -1,3 +1,4 @@
+use bimap::BiMap;
 use serde_with::serde_as;
 use serde::{Serialize, Deserialize};
 use std::io::{BufRead, BufReader};
@@ -5,6 +6,7 @@ use std::path::Path;
 use std::collections::{HashMap, HashSet};
 
 use crate::{M2, V2};
+use crate::asc::Asc;
 use cgalg::d2::angle_dist;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -19,7 +21,7 @@ pub type Vid = u64;
 #[serde_as]
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Rawmodel {
-	pub name: HashMap<String, Vid>,
+	pub name: BiMap<String, Vid>,
 	pub id_alloc: Vid,
 	pub neigh: HashMap<Vid, Vec<Vid>>,
 	pub border: HashSet<Vid>,
@@ -29,6 +31,8 @@ pub struct Rawmodel {
 	pub fs: Vec<[Vid; 3]>,
 	pub tex_layer: i32,
 	pub is_static: bool,
+	#[serde(default)]
+	pub asc: Vec<Asc>,
 }
 
 impl Rawmodel {
@@ -71,6 +75,10 @@ impl Rawmodel {
 		let string = serde_json::to_string(self)?;
 		std::fs::write(file, string)?;
 		Ok(())
+	}
+
+	pub fn get_vertex(&mut self, name: &str) -> Option<&RawVertex> {
+		self.name.get_by_left(name).map(|x| self.vs.get(x)).flatten()
 	}
 
 	// build fs from vs
@@ -238,7 +246,7 @@ impl Rawmodel {
 	pub fn simple_load<P: AsRef<Path>>(
 		file: P,
 	) -> std::io::Result<Self> {
-		let mut name = HashMap::default();
+		let mut name = BiMap::default();
 		let mut vs = HashMap::default();
 		let mut id_alloc = Vid::default();
 		let mut fs = Vec::new();
@@ -270,7 +278,8 @@ impl Rawmodel {
 					if split.len() != 4 {
 						panic!("v error");
 					}
-					let mut f = core::array::from_fn(|idx| *name.get(split[idx + 1]).unwrap());
+					let mut f = core::array::from_fn(|idx| *name.get_by_left(split[idx + 1])
+						.unwrap());
 					f.sort_unstable();
 					fs.push(f);
 				}
@@ -282,6 +291,7 @@ impl Rawmodel {
 			neigh: Default::default(),
 			border: Default::default(),
 			dcs: Default::default(),
+			asc: Default::default(),
 			vs,
 			fs,
 			tex_layer: -2,
