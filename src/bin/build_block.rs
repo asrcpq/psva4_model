@@ -47,7 +47,12 @@ fn main() {
 			}
 			for i in 0..4 {
 				if rawmo.vs.contains_key(&vids[i]) { continue }
-				rawmo.vs.insert(vids[i], RawVertex {tex: pos[i], pos: pos[i], im: 1.0});
+				rawmo.vs.insert(vids[i], RawVertex {
+					tex: pos[i],
+					pos: pos[i],
+					mass: 1.0,
+					break_thresh: 0.1,
+				});
 			}
 			rawmo.add_neigh_raw([vids[0], vids[1]]);
 			rawmo.add_neigh_raw([vids[0], vids[2]]);

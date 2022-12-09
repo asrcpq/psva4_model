@@ -14,7 +14,11 @@ pub struct RawVertex {
 	pub pos: V2,
 	pub tex: V2,
 	pub mass: f32,
+	#[serde(default = "default1")]
+	pub break_thresh: f32,
 }
+
+fn default1() -> f32 { 0.1f32 }
 
 pub type Vid = u64;
 
@@ -272,6 +276,7 @@ impl Rawmodel {
 						pos: v,
 						tex: v,
 						mass,
+						break_thresh: default1(),
 					});
 					id_alloc += 1;
 				},
