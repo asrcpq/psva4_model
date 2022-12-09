@@ -13,7 +13,7 @@ use cgalg::d2::angle_dist;
 pub struct RawVertex {
 	pub pos: V2,
 	pub tex: V2,
-	pub im: f32,
+	pub mass: f32,
 }
 
 pub type Vid = u64;
@@ -33,6 +33,7 @@ pub struct Rawmodel {
 	pub is_static: bool,
 	#[serde(default)]
 	pub asc: Vec<Asc>,
+	// FIXME: delete node does not remove asc!
 }
 
 impl Rawmodel {
@@ -265,12 +266,12 @@ impl Rawmodel {
 						split[2].parse::<f32>().unwrap(),
 						split[3].parse::<f32>().unwrap(),
 					);
-					let im = split.get(4).map(|x| x.parse::<f32>().unwrap()).unwrap_or(1f32);
+					let mass = split.get(4).map(|x| x.parse::<f32>().unwrap()).unwrap_or(1f32);
 					name.insert(split[1].to_string(), id_alloc);
 					vs.insert(id_alloc, RawVertex {
 						pos: v,
 						tex: v,
-						im,
+						mass,
 					});
 					id_alloc += 1;
 				},
